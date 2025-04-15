@@ -1,0 +1,130 @@
+# Environmental Management Service
+Proto 1
+
+syntax = "proto3";
+
+option java_multiple_files = true;
+option java_package = "grpc.generated.environmentalmanagement";
+option java_outer_classname = "environmentalManagementServiceImpl";
+
+package environmentalmanagement;
+
+//The service definition
+//A server would be implemented to extend the class <environmentalManagementService>ImplBase
+//EnvironmentalManagementService- the client requests the current temperature- unary
+//The client request a continuous stream of smoke level reading - server streaming
+
+Service EnvironmentalManagement{
+
+rpc GetRoomTemperature(TemperatureRequest) returns (TemperatureResponse) {} // Unary
+rpc StreamSmokeLevel(SmokeLevelRequest) returns (stream SmokeLevelResponse) {} // Server
+}
+//message
+
+message TemperatureRequest {
+    string room_id = 1;
+}
+//response containing answer from the server.
+message TemperatureResponse{
+    double temperature = 1;
+}
+//message
+
+message SmokeLevelRequest {
+    int32 smoke_sensor = 1;
+}
+//response containing answer from the server.
+
+message SmokeLevelResponse {
+    int32 smoke_level = 1;
+
+}
+
+
+# Security System Service
+Proto 2
+syntax = "proto3";
+
+option java_multiple_files = true;
+option java_package = "grpc.generated.SecuritySystem";
+option java_outer_classname = "SecuritySystemServiceImpl";
+
+package SecuritySystem;
+
+//The service definition
+//A server would be implemented to extend the class //< SecuritySystemService >ImplBase
+
+// SecuritySystem provides us with video footage around the house for the purpose of analysis.
+//video segments from the camera are uploaded for analysis…..Client streaming
+//Results of the analysis are returned as detecting motion around the house, recognizing.
+
+service SecuritySystem {
+
+rpc UploadVideoSegments(stream VideoSegmentsRequest) returns (VideoAnalysisResponse) {} // Client
+
+}
+//message
+
+message VideoSegmentsRequest{
+    bytes data = 1;
+}
+//response containing answer from the server.
+
+message VideoAnalysisResponse{
+    bool motion_detected = 1;
+    bool recognized_face = 2;
+
+}
+
+# Appliance Management Service
+Proto 3
+
+syntax = "proto3";
+
+option java_multiple_files = true;
+option java_package = "grpc.generated.appliancemanagement";
+option java_outer_classname = "ApplianceManagementServiceImpl";
+
+package ApplianceManagement;
+
+//The service definition
+//A server would be implemented to extend the class < appliancemanagementService>ImplBase
+
+//ApplianceManagementService 
+//Series of command can be issued to appliances once connected to the appliance manager. 
+//The method used here is bi-directional streaming which allows room for  real-time 
+//communication between the client and the server.
+
+service SpeakerApplianceManagement{
+
+rpc ManagePlay(PlayRequest) returns (PlayResponse){}
+rpc ManagePause(PauseRequest) returns (PauseResponse){}
+rpc ManageSetVolume(VolumeRequest) returns (VolumeResponse){}
+
+}
+//message
+
+message PlayRequest {
+    string mediaURL = 1;
+}
+//response containing answer from the server.
+message PlayResponse{
+    bool success = 1;
+}
+
+message PauseRequest {
+    string mediaURL = 1;
+}
+//response containing answer from the server.
+message PauseResponse{
+    bool success = 1;
+}
+
+message VolumeRequest {
+    int32 volume = 1;
+}
+//response containing answer from the server.
+message VolumeResponse{
+    bool success = 1;
+}
+
