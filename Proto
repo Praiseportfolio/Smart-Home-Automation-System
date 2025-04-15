@@ -12,7 +12,7 @@ package environmentalmanagement;
 //The service definition
 //A server would be implemented to extend the class <environmentalManagementService>ImplBase
 //EnvironmentalManagementService- the client requests the current temperature- unary
-//The client request a continuous stream of smoke level reading - server streaming
+//The client requests a continuous stream of smoke level reading - server streaming
 
 Service EnvironmentalManagement{
 
@@ -97,9 +97,9 @@ package ApplianceManagement;
 
 service SpeakerApplianceManagement{
 
-rpc ManagePlay(PlayRequest) returns (PlayResponse){}
-rpc ManagePause(PauseRequest) returns (PauseResponse){}
-rpc ManageSetVolume(VolumeRequest) returns (VolumeResponse){}
+rpc ManagePlay(Stream PlayRequest) returns (Stream PlayResponse){}
+rpc ManagePause(Stream PauseRequest) returns (Stream PauseResponse){}
+rpc ManageSetVolume(Stream VolumeRequest) returns (Stream VolumeResponse){}
 
 }
 //message
