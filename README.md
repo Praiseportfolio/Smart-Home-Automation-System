@@ -1,5 +1,6 @@
 # Smart-Home-Automation-System
-The purpose of this automation system is to showcase the interaction of smart devices via gRPC-based communication
+The purpose of this automation system is to showcase the interaction of smart devices via gRPC-based communication. 
+
 Implementation includes four services that simulate smart home devices.
 Automatic discovery of devices
 Service communication using defined proto files.
