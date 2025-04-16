@@ -1,0 +1,115 @@
+/*
+ * Click nbfs://nbhost/SystemFileSystem/Templates/Licenses/license-default.txt to change this license
+ * Click nbfs://nbhost/SystemFileSystem/Templates/Classes/Class.java to edit this template
+ */
+
+
+/**
+ *
+
+ */
+// Server (EnvironmentalManagementServer.java)
+
+import grpc.generated.environmentalmanagement.EnvironmentalManagementGrpc;
+import grpc.generated.environmentalmanagement.SmokeLevelRequest;
+import grpc.generated.environmentalmanagement.SmokeLevelResponse;
+import grpc.generated.environmentalmanagement.TemperatureRequest;
+import grpc.generated.environmentalmanagement.TemperatureResponse;
+import io.grpc.Server;
+import io.grpc.ServerBuilder;
+import io.grpc.stub.StreamObserver;
+import java.io.IOException;
+import java.util.Random;
+import java.util.concurrent.TimeUnit;
+import java.util.logging.Level;
+import java.util.logging.Logger;
+
+public class environmentalManagementServer {
+
+    private static final Logger logger = Logger.getLogger(environmentalManagementServer.class.getName());
+
+    private Server server;
+
+    private void start() throws IOException {
+        int port = 50051;
+        server = ServerBuilder.forPort(port)
+                .addService(new environmentalManagementServiceImpl())
+                .build()
+                .start();
+        logger.info("Server started, listening on " + port);
+        Runtime.getRuntime().addShutdownHook(new Thread(() -> {
+            // Use stderr here since the logger may have been reset by its JVM shutdown hook.
+            System.err.println("*** shutting down gRPC server since JVM is shutting down");
+            try {
+                environmentalManagementServer.this.stop();
+            } catch (InterruptedException e) {
+                e.printStackTrace(System.err);
+            }
+            System.err.println("*** server shut down");
+        }));
+    }
+
+    private void stop() throws InterruptedException {
+        if (server != null) {
+            server.shutdown().awaitTermination(30, TimeUnit.SECONDS);
+        }
+    }
+
+    /**
+     * Await termination on the main thread since the grpc library uses daemon threads.
+     */
+    private void blockUntilShutdown() throws InterruptedException {
+        if (server != null) {
+            server.awaitTermination();
+        }
+    }
+
+    /**
+     * Main launches the server from the command line.
+     */
+    public static void main(String[] args) throws IOException, InterruptedException {
+        final environmentalManagementServer server = new environmentalManagementServer();
+        server.start();
+        server.blockUntilShutdown();
+    }
+
+    static class environmentalManagementServiceImpl extends EnvironmentalManagementGrpc.EnvironmentalManagementImplBase {
+
+        @Override
+        public void getRoomTemperature(TemperatureRequest request, StreamObserver<TemperatureResponse> responseObserver) {
+            String roomId = request.getRoomId();
+            logger.info("Received GetRoomTemperature request for room: " + roomId);
+            // Simulate getting temperature based on room ID
+            double temperature;
+            if (roomId.equals("LivingRoom")) {
+                temperature = 22.5;
+            } else if (roomId.equals("Bedroom")) {
+                temperature = 20.0;
+            } else {
+                temperature = 25.0; // Default temperature
+            }
+            TemperatureResponse response = TemperatureResponse.newBuilder().setTemperature(temperature).build();
+            responseObserver.onNext(response);
+            responseObserver.onCompleted();
+        }
+
+        @Override
+        public void streamSmokeLevel(SmokeLevelRequest request, StreamObserver<SmokeLevelResponse> responseObserver) {
+            int smokeSensorId = request.getSmokeSensor();
+            logger.info("Received StreamSmokeLevel request for sensor: " + smokeSensorId);
+            Random random = new Random();
+            try {
+                for (int i = 0; i < 10; i++) { // Simulate streaming for a while
+                    int smokeLevel = random.nextInt(100); // Simulate smoke level reading
+                    SmokeLevelResponse response = SmokeLevelResponse.newBuilder().setSmokeLevel(smokeLevel).build();
+                    responseObserver.onNext(response);
+                    TimeUnit.SECONDS.sleep(1); // Simulate reading interval
+                }
+            } catch (InterruptedException e) {
+                logger.log(Level.WARNING, "Stream interrupted.", e);
+            } finally {
+                responseObserver.onCompleted();
+            }
+        }
+    }
+}
