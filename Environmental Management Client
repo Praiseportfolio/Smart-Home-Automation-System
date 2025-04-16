@@ -1,0 +1,90 @@
+/*
+ * Click nbfs://nbhost/SystemFileSystem/Templates/Licenses/license-default.txt to change this license
+ * Click nbfs://nbhost/SystemFileSystem/Templates/Classes/Class.java to edit this template
+ */
+
+
+/**
+ *
+ */
+import grpc.generated.environmentalmanagement.EnvironmentalManagementGrpc;
+import grpc.generated.environmentalmanagement.EnvironmentalManagementGrpc.EnvironmentalManagementBlockingStub;
+import grpc.generated.environmentalmanagement.SmokeLevelRequest;
+import grpc.generated.environmentalmanagement.SmokeLevelResponse;
+import grpc.generated.environmentalmanagement.TemperatureRequest;
+import grpc.generated.environmentalmanagement.TemperatureResponse;
+import io.grpc.ManagedChannel;
+import io.grpc.ManagedChannelBuilder;
+import java.util.Iterator;
+import java.util.concurrent.TimeUnit;
+import java.util.logging.Level;
+import java.util.logging.Logger;
+
+public class environmentalManagementClient {
+    private static final Logger logger = Logger.getLogger(environmentalManagementClient.class.getName());
+
+     EnvironmentalManagementBlockingStub blockingStub;
+    private final ManagedChannel channel;
+
+    
+    public environmentalManagementClient(String host, int port) {
+        this(ManagedChannelBuilder.forAddress(host, port)
+                .usePlaintext()
+                .build());
+    }
+
+   
+    environmentalManagementClient(ManagedChannel channel) {
+        this.channel = channel;
+        blockingStub = EnvironmentalManagementGrpc.newBlockingStub(channel);
+        EnvironmentalManagementGrpc.newStub(channel);
+    }
+
+    public void shutdown() throws InterruptedException {
+        channel.shutdown().awaitTermination(5, TimeUnit.SECONDS);
+        logger.info("Client shut down");
+    }
+
+    public void getRoomTemperature(String roomId) {
+        logger.info("Requesting temperature for room: " + roomId);
+        TemperatureRequest request = TemperatureRequest.newBuilder().setRoomId(roomId).build();
+        TemperatureResponse response;
+        try {
+            response = blockingStub.getRoomTemperature(request);
+            logger.info("Temperature in " + roomId + ": " + response.getTemperature() + " Celsius");
+            System.out.println("Temperature in " + roomId + ": " + response.getTemperature() + " Celsius");
+        } catch (Exception e) {
+            logger.log(Level.WARNING, "RPC failed: {0}", e.getMessage());
+            return;
+        }
+    }
+
+    public void streamSmokeLevel(int sensorId) {
+        logger.info("Requesting smoke level stream for sensor: " + sensorId);
+        SmokeLevelRequest request = SmokeLevelRequest.newBuilder().setSmokeSensor(sensorId).build();
+
+        Iterator<SmokeLevelResponse> responses;
+        try {
+            responses = blockingStub.streamSmokeLevel(request);
+            while (responses.hasNext()) {
+                SmokeLevelResponse response = responses.next();
+                logger.info("Smoke level from sensor " + sensorId + ": " + response.getSmokeLevel());
+                System.out.println("Smoke level from sensor " + sensorId + ": " + response.getSmokeLevel());
+                TimeUnit.MILLISECONDS.sleep(500); // Simulate client processing time
+            }
+        } catch (InterruptedException e) {
+            logger.log(Level.WARNING, "RPC failed: {0}", e.getMessage());
+        }
+    }
+
+    public static void main(String[] args) throws Exception {
+        environmentalManagementClient client = new environmentalManagementClient("localhost", 50051);
+        try {
+            client.getRoomTemperature("LivingRoom");
+            client.getRoomTemperature("Bedroom");
+            client.streamSmokeLevel(1);
+        } finally {
+            client.shutdown();
+        }
+    }
+}
