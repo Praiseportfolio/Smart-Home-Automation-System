@@ -1,0 +1,190 @@
+
+/*
+ * Click nbfs://nbhost/SystemFileSystem/Templates/Licenses/license-default.txt to change this license
+ * Click nbfs://nbhost/SystemFileSystem/Templates/Classes/Class.java to edit this template
+ */
+
+/**
+ *
+
+ */
+// Client (ApplianceManagementClient.java)
+
+
+import grpc.generated.appliancemanagement.PlayRequest;
+import grpc.generated.appliancemanagement.PlayResponse;
+import grpc.generated.appliancemanagement.PauseRequest;
+import grpc.generated.appliancemanagement.PauseResponse;
+import grpc.generated.appliancemanagement.SpeakerApplianceManagementGrpc;
+import grpc.generated.appliancemanagement.VolumeRequest;
+import grpc.generated.appliancemanagement.VolumeResponse;
+import io.grpc.ManagedChannel;
+import io.grpc.ManagedChannelBuilder;
+import io.grpc.stub.StreamObserver;
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.TimeUnit;
+import java.util.logging.Logger;
+
+public class applianceManagementClient {
+
+    private static final Logger logger = Logger.getLogger(applianceManagementClient.class.getName());
+    private final SpeakerApplianceManagementGrpc.SpeakerApplianceManagementStub asyncStub;
+    private final ManagedChannel channel;
+
+    public applianceManagementClient(String host, int port) {
+        channel = ManagedChannelBuilder.forAddress(host, port)
+                .usePlaintext()
+                .build();
+        asyncStub = SpeakerApplianceManagementGrpc.newStub(channel);
+    }
+
+    public void shutdown() throws InterruptedException {
+        channel.shutdown().awaitTermination(5, TimeUnit.SECONDS);
+    }
+
+    public void managePlayStream(String... mediaURLs) throws InterruptedException {
+        logger.info("Starting bidirectional ManagePlay stream...");
+        CountDownLatch finishLatch = new CountDownLatch(1);
+
+        StreamObserver<PlayRequest> requestObserver =
+                asyncStub.managePlay(
+                        new StreamObserver<PlayResponse>() {
+                            @Override
+                            public void onNext(PlayResponse response) {
+                                logger.info("Received PlayResponse: " + response.getSuccess());
+                                System.out.println("Play Response: " + response.getSuccess());
+                            }
+
+                            @Override
+                            public void onError(Throwable t) {
+                                logger.warning("Error in ManagePlay response: " + t.getMessage());
+                                finishLatch.countDown();
+                            }
+
+                            @Override
+                            public void onCompleted() {
+                                logger.info("ManagePlay response stream completed.");
+                                finishLatch.countDown();
+                            }
+                        });
+
+        try {
+            for (String url : mediaURLs) {
+                PlayRequest request = PlayRequest.newBuilder().setMediaURL(url).build();
+                logger.info("Sending PlayRequest: " + request.getMediaURL());
+                requestObserver.onNext(request);
+                TimeUnit.MILLISECONDS.sleep(200);
+            }
+        } catch (Exception e) {
+            logger.warning("Error sending PlayRequest: " + e.getMessage());
+            requestObserver.onError(e);
+            return;
+        } finally {
+            requestObserver.onCompleted();
+        }
+
+        finishLatch.await(1, TimeUnit.MINUTES);
+        logger.info("Bidirectional ManagePlay finished.");
+    }
+
+    public void managePauseStream(String... mediaURLs) throws InterruptedException {
+        logger.info("Starting bidirectional ManagePause stream...");
+        CountDownLatch finishLatch = new CountDownLatch(1);
+
+        StreamObserver<PauseRequest> requestObserver =
+                asyncStub.managePause(
+                        new StreamObserver<PauseResponse>() {
+                            @Override
+                            public void onNext(PauseResponse response) {
+                                logger.info("Received PauseResponse: " + response.getSuccess());
+                                System.out.println("Pause Response: " + response.getSuccess());
+                            }
+
+                            @Override
+                            public void onError(Throwable t) {
+                                logger.warning("Error in ManagePause response: " + t.getMessage());
+                                finishLatch.countDown();
+                            }
+
+                            @Override
+                            public void onCompleted() {
+                                logger.info("ManagePause response stream completed.");
+                                finishLatch.countDown();
+                            }
+                        });
+
+        try {
+            for (String url : mediaURLs) {
+                PauseRequest request = PauseRequest.newBuilder().setMediaURL(url).build();
+                logger.info("Sending PauseRequest: " + request.getMediaURL());
+                requestObserver.onNext(request);
+                TimeUnit.MILLISECONDS.sleep(300);
+            }
+        } catch (Exception e) {
+            logger.warning("Error sending PauseRequest: " + e.getMessage());
+            requestObserver.onError(e);
+            return;
+        } finally {
+            requestObserver.onCompleted();
+        }
+
+        finishLatch.await(1, TimeUnit.MINUTES);
+        logger.info("Bidirectional ManagePause finished.");
+    }
+
+    public void manageSetVolumeStream(int... volumes) throws InterruptedException {
+        logger.info("Starting bidirectional ManageSetVolume stream...");
+        CountDownLatch finishLatch = new CountDownLatch(1);
+
+        StreamObserver<VolumeRequest> requestObserver =
+                asyncStub.manageSetVolume(
+                        new StreamObserver<VolumeResponse>() {
+                            @Override
+                            public void onNext(VolumeResponse response) {
+                                logger.info("Received VolumeResponse: " + response.getSuccess());
+                                System.out.println("Volume Response: " + response.getSuccess());
+                            }
+
+                            @Override
+                            public void onError(Throwable t) {
+                                logger.warning("Error in ManageSetVolume response: " + t.getMessage());
+                                finishLatch.countDown();
+                            }
+
+                            @Override
+                            public void onCompleted() {
+                                logger.info("ManageSetVolume response stream completed.");
+                                finishLatch.countDown();
+                            }
+                        });
+
+        try {
+            for (int volume : volumes) {
+                VolumeRequest request = VolumeRequest.newBuilder().setVolume(volume).build();
+                logger.info("Sending VolumeRequest: " + request.getVolume());
+                requestObserver.onNext(request);
+                TimeUnit.MILLISECONDS.sleep(400);
+            }
+        } catch (Exception e) {
+            logger.warning("Error sending VolumeRequest: " + e.getMessage());
+            requestObserver.onError(e);
+            return;
+        } finally {
+            requestObserver.onCompleted();
+        }
+
+        finishLatch.await(1, TimeUnit.MINUTES);
+        logger.info("Bidirectional ManageSetVolume finished.");
+    }
+
+    public static void main(String[] args) throws InterruptedException {
+        applianceManagementClient client = new applianceManagementClient("localhost", 50051);
+        try {
+            client.managePlayStream("spotify:track:1", "spotify:track:2");
+            client.managePauseStream("spotify:track:1");
+            client.manageSetVolumeStream(30, 60);
+        } finally {
+            client.shutdown();
+        }
+    }
+}
