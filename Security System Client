@@ -1,1 +1,108 @@
+/*
+ * Click nbfs://nbhost/SystemFileSystem/Templates/Licenses/license-default.txt to change this license
+ * Click nbfs://nbhost/SystemFileSystem/Templates/Classes/Class.java to edit this template
+ */
 
+/**
+ *
+ * @author jesutofunmiawodein
+ */
+// Client
+
+
+import grpc.generated.SecuritySystem.SecuritySystemGrpc;
+import grpc.generated.SecuritySystem.VideoAnalysisResponse;
+import grpc.generated.SecuritySystem.VideoSegmentsRequest;
+import io.grpc.ManagedChannel;
+import io.grpc.ManagedChannelBuilder;
+import io.grpc.stub.StreamObserver;
+import java.io.IOException;
+import java.nio.file.Files;
+import java.nio.file.Paths;
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.TimeUnit;
+import java.util.logging.Level;
+import java.util.logging.Logger;
+
+public class SecuritySystemClient {
+
+    private static final Logger logger = Logger.getLogger(SecuritySystemClient.class.getName());
+
+    private final SecuritySystemGrpc.SecuritySystemStub asyncStub;
+    private final ManagedChannel channel;
+
+    public SecuritySystemClient(String host, int port) {
+        channel = ManagedChannelBuilder.forAddress(host, port)
+                .usePlaintext()
+                .build();
+        asyncStub = SecuritySystemGrpc.newStub(channel);
+    }
+
+    public void shutdown() throws InterruptedException {
+        channel.shutdown().awaitTermination(5, TimeUnit.SECONDS);
+    }
+
+    public void uploadVideo(String videoFilePath) throws InterruptedException, IOException {
+        logger.info("Starting video upload from: " + videoFilePath);
+        final CountDownLatch finishLatch = new CountDownLatch(1);
+
+        StreamObserver<VideoSegmentsRequest> requestObserver =
+                asyncStub.uploadVideoSegments(new StreamObserver<VideoAnalysisResponse>() {
+                    @Override
+                    public void onNext(VideoAnalysisResponse response) {
+                        logger.info("Video analysis complete. Motion detected: " + response.getMotionDetected() +
+                                    ", Face recognized: " + response.getRecognizedFace());
+                        System.out.println("Video analysis complete. Motion detected: " + response.getMotionDetected() +
+                                           ", Face recognized: " + response.getRecognizedFace());
+                    }
+
+                    @Override
+                    public void onError(Throwable t) {
+                        logger.log(Level.WARNING, "Error during video upload: {0}", t.getMessage());
+                        finishLatch.countDown();
+                    }
+
+                    @Override
+                    public void onCompleted() {
+                        logger.info("Video upload and analysis finished.");
+                        finishLatch.countDown();
+                    }
+                });
+
+        try {
+            byte[] videoData = Files.readAllBytes(Paths.get(videoFilePath));
+            int chunkSize = 1024 * 64; // 64KB chunks
+            for (int i = 0; i < videoData.length; i += chunkSize) {
+                int end = Math.min(videoData.length, i + chunkSize);
+                byte[] chunk = java.util.Arrays.copyOfRange(videoData, i, end);
+                VideoSegmentsRequest request = VideoSegmentsRequest.newBuilder().setData(com.google.protobuf.ByteString.copyFrom(chunk)).build();
+                requestObserver.onNext(request);
+                logger.info("Sent video segment of size: " + chunk.length + " bytes");
+                TimeUnit.MILLISECONDS.sleep(100); // Simulate streaming rate
+            }
+        } catch (Exception e) {
+            logger.log(Level.WARNING, "Error reading or sending video: {0}", e.getMessage());
+            requestObserver.onError(e);
+            return;
+        }
+
+        requestObserver.onCompleted();
+        finishLatch.await(1, TimeUnit.MINUTES);
+        logger.info("Video upload process finished.");
+    }
+
+    public static void main(String[] args) throws Exception {
+        if (args.length != 1) {
+            System.err.println("Usage: SecuritySystemClient <video_file_path>");
+            return;
+        }
+
+        String videoFilePath = args[0];
+        SecuritySystemClient client = new SecuritySystemClient("localhost", 50051);
+        try {
+            client.uploadVideo(videoFilePath);
+        } finally {
+            client.shutdown();
+        }
+    }
+}
