@@ -23,6 +23,9 @@ import java.util.Random;
 import java.util.concurrent.TimeUnit;
 import java.util.logging.Level;
 import java.util.logging.Logger;
+import io.grpc.Context;
+import io.grpc.Status;
+import io.grpc.StatusRuntimeException;
 
 public class environmentalManagementServer {
 
@@ -38,14 +41,13 @@ public class environmentalManagementServer {
                 .start();
         logger.info("Server started, listening on " + port);
         Runtime.getRuntime().addShutdownHook(new Thread(() -> {
-            // Use stderr here since the logger may have been reset by its JVM shutdown hook.
-            System.err.println("*** shutting down gRPC server since JVM is shutting down");
+            System.err.println("shutting down gRPC server");
             try {
                 environmentalManagementServer.this.stop();
             } catch (InterruptedException e) {
                 e.printStackTrace(System.err);
             }
-            System.err.println("*** server shut down");
+            System.err.println("server shut down");
         }));
     }
 
@@ -55,18 +57,12 @@ public class environmentalManagementServer {
         }
     }
 
-    /**
-     * Await termination on the main thread since the grpc library uses daemon threads.
-     */
     private void blockUntilShutdown() throws InterruptedException {
         if (server != null) {
             server.awaitTermination();
         }
     }
 
-    /**
-     * Main launches the server from the command line.
-     */
     public static void main(String[] args) throws IOException, InterruptedException {
         final environmentalManagementServer server = new environmentalManagementServer();
         server.start();
@@ -79,7 +75,17 @@ public class environmentalManagementServer {
         public void getRoomTemperature(TemperatureRequest request, StreamObserver<TemperatureResponse> responseObserver) {
             String roomId = request.getRoomId();
             logger.info("Received GetRoomTemperature request for room: " + roomId);
-            // Simulate getting temperature based on room ID
+            
+            if (roomId == null || roomId.trim().isEmpty()) {
+                responseObserver.onError(new StatusRuntimeException(Status.INVALID_ARGUMENT.withDescription("Room ID cannot be empty.")));
+                return;
+            }
+
+            if (roomId.equals("ErrorRoom")) {
+                responseObserver.onError(new StatusRuntimeException(Status.NOT_FOUND.withDescription("Room not found: " + roomId)));
+                return;
+            }
+            
             double temperature;
             if (roomId.equals("LivingRoom")) {
                 temperature = 22.5;
@@ -99,8 +105,20 @@ public class environmentalManagementServer {
             logger.info("Received StreamSmokeLevel request for sensor: " + smokeSensorId);
             Random random = new Random();
             try {
-                for (int i = 0; i < 10; i++) { // Simulate streaming for a while
-                    int smokeLevel = random.nextInt(100); // Simulate smoke level reading
+                for (int i = 0; i < 10; i++) { 
+                    if (Context.current().isCancelled()) {
+                        logger.info("Client cancelled the smoke level stream.");
+                        return;
+                    }
+                    if (smokeSensorId == -1) {
+                        responseObserver.onError(new StatusRuntimeException(Status.INVALID_ARGUMENT.withDescription("Invalid sensor ID.")));
+                        return;
+                    }
+                    if (i == 5 && smokeSensorId == 99) { // Simulate a server-side error
+                        responseObserver.onError(new StatusRuntimeException(Status.INTERNAL.withDescription("Simulated server error.")));
+                        return;
+                    }
+                    int smokeLevel = random.nextInt(100);
                     SmokeLevelResponse response = SmokeLevelResponse.newBuilder().setSmokeLevel(smokeLevel).build();
                     responseObserver.onNext(response);
                     TimeUnit.SECONDS.sleep(1); // Simulate reading interval
