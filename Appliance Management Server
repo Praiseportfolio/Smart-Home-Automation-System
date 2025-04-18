@@ -7,7 +7,6 @@
  *
  * @author jesutofunmiawodein
  */
-import grpc.generated.appliancemanagement.ApplianceManagementServiceImpl;
 import grpc.generated.appliancemanagement.PlayRequest;
 import grpc.generated.appliancemanagement.PlayResponse;
 import grpc.generated.appliancemanagement.PauseRequest;
@@ -15,6 +14,8 @@ import grpc.generated.appliancemanagement.PauseResponse;
 import grpc.generated.appliancemanagement.SpeakerApplianceManagementGrpc;
 import grpc.generated.appliancemanagement.VolumeRequest;
 import grpc.generated.appliancemanagement.VolumeResponse;
+import grpc.generated.appliancemanagement.ControlRequest;
+import grpc.generated.appliancemanagement.ControlResponse;
 import io.grpc.Server;
 import io.grpc.ServerBuilder;
 import io.grpc.stub.StreamObserver;
