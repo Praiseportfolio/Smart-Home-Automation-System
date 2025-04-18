@@ -6,85 +6,128 @@
 
 /**
  *
+
  */
+// Server (EnvironmentalManagementServer.java)
+
 import grpc.generated.environmentalmanagement.EnvironmentalManagementGrpc;
-import grpc.generated.environmentalmanagement.EnvironmentalManagementGrpc.EnvironmentalManagementBlockingStub;
 import grpc.generated.environmentalmanagement.SmokeLevelRequest;
 import grpc.generated.environmentalmanagement.SmokeLevelResponse;
 import grpc.generated.environmentalmanagement.TemperatureRequest;
 import grpc.generated.environmentalmanagement.TemperatureResponse;
-import io.grpc.ManagedChannel;
-import io.grpc.ManagedChannelBuilder;
-import java.util.Iterator;
+import io.grpc.Server;
+import io.grpc.ServerBuilder;
+import io.grpc.stub.StreamObserver;
+import java.io.IOException;
+import java.util.Random;
 import java.util.concurrent.TimeUnit;
 import java.util.logging.Level;
 import java.util.logging.Logger;
+import io.grpc.Context;
+import io.grpc.Status;
+import io.grpc.StatusRuntimeException;
 
-public class environmentalManagementClient {
-    private static final Logger logger = Logger.getLogger(environmentalManagementClient.class.getName());
+public class environmentalManagementServer {
 
-     EnvironmentalManagementBlockingStub blockingStub;
-    private final ManagedChannel channel;
+    private static final Logger logger = Logger.getLogger(environmentalManagementServer.class.getName());
 
-    
-    public environmentalManagementClient(String host, int port) {
-        this(ManagedChannelBuilder.forAddress(host, port)
-                .usePlaintext()
-                .build());
-    }
+    private Server server;
 
-   
-    environmentalManagementClient(ManagedChannel channel) {
-        this.channel = channel;
-        blockingStub = EnvironmentalManagementGrpc.newBlockingStub(channel);
-        EnvironmentalManagementGrpc.newStub(channel);
-    }
-
-    public void shutdown() throws InterruptedException {
-        channel.shutdown().awaitTermination(5, TimeUnit.SECONDS);
-        logger.info("Client shut down");
-    }
-
-    public void getRoomTemperature(String roomId) {
-        logger.info("Requesting temperature for room: " + roomId);
-        TemperatureRequest request = TemperatureRequest.newBuilder().setRoomId(roomId).build();
-        TemperatureResponse response;
-        try {
-            response = blockingStub.getRoomTemperature(request);
-            logger.info("Temperature in " + roomId + ": " + response.getTemperature() + " Celsius");
-            System.out.println("Temperature in " + roomId + ": " + response.getTemperature() + " Celsius");
-        } catch (Exception e) {
-            logger.log(Level.WARNING, "RPC failed: {0}", e.getMessage());
-            return;
-        }
-    }
-
-    public void streamSmokeLevel(int sensorId) {
-        logger.info("Requesting smoke level stream for sensor: " + sensorId);
-        SmokeLevelRequest request = SmokeLevelRequest.newBuilder().setSmokeSensor(sensorId).build();
-
-        Iterator<SmokeLevelResponse> responses;
-        try {
-            responses = blockingStub.streamSmokeLevel(request);
-            while (responses.hasNext()) {
-                SmokeLevelResponse response = responses.next();
-                logger.info("Smoke level from sensor " + sensorId + ": " + response.getSmokeLevel());
-                System.out.println("Smoke level from sensor " + sensorId + ": " + response.getSmokeLevel());
-                TimeUnit.MILLISECONDS.sleep(500); // Simulate client processing time
+    private void start() throws IOException {
+        int port = 50051;
+        server = ServerBuilder.forPort(port)
+                .addService(new environmentalManagementServiceImpl())
+                .build()
+                .start();
+        logger.info("Server started, listening on " + port);
+        Runtime.getRuntime().addShutdownHook(new Thread(() -> {
+            System.err.println("shutting down gRPC server");
+            try {
+                environmentalManagementServer.this.stop();
+            } catch (InterruptedException e) {
+                e.printStackTrace(System.err);
             }
-        } catch (InterruptedException e) {
-            logger.log(Level.WARNING, "RPC failed: {0}", e.getMessage());
+            System.err.println("server shut down");
+        }));
+    }
+
+    private void stop() throws InterruptedException {
+        if (server != null) {
+            server.shutdown().awaitTermination(30, TimeUnit.SECONDS);
         }
     }
 
-    public static void main(String[] args) throws Exception {
-        environmentalManagementClient client = new environmentalManagementClient("localhost", 50051);
-        try {
-            client.getRoomTemperature("LivingRoom");
-            client.getRoomTemperature("Bedroom");
-            client.streamSmokeLevel(1);
-        } finally {
-            client.shutdown();
+    private void blockUntilShutdown() throws InterruptedException {
+        if (server != null) {
+            server.awaitTermination();
+        }
+    }
+
+    public static void main(String[] args) throws IOException, InterruptedException {
+        final environmentalManagementServer server = new environmentalManagementServer();
+        server.start();
+        server.blockUntilShutdown();
+    }
+
+    static class environmentalManagementServiceImpl extends EnvironmentalManagementGrpc.EnvironmentalManagementImplBase {
+
+        @Override
+        public void getRoomTemperature(TemperatureRequest request, StreamObserver<TemperatureResponse> responseObserver) {
+            String roomId = request.getRoomId();
+            logger.info("Received GetRoomTemperature request for room: " + roomId);
+            
+            if (roomId == null || roomId.trim().isEmpty()) {
+                responseObserver.onError(new StatusRuntimeException(Status.INVALID_ARGUMENT.withDescription("Room ID cannot be empty.")));
+                return;
+            }
+
+            if (roomId.equals("ErrorRoom")) {
+                responseObserver.onError(new StatusRuntimeException(Status.NOT_FOUND.withDescription("Room not found: " + roomId)));
+                return;
+            }
+            
+            double temperature;
+            if (roomId.equals("LivingRoom")) {
+                temperature = 22.5;
+            } else if (roomId.equals("Bedroom")) {
+                temperature = 20.0;
+            } else {
+                temperature = 25.0; // Default temperature
+            }
+            TemperatureResponse response = TemperatureResponse.newBuilder().setTemperature(temperature).build();
+            responseObserver.onNext(response);
+            responseObserver.onCompleted();
+        }
+
+        @Override
+        public void streamSmokeLevel(SmokeLevelRequest request, StreamObserver<SmokeLevelResponse> responseObserver) {
+            int smokeSensorId = request.getSmokeSensor();
+            logger.info("Received StreamSmokeLevel request for sensor: " + smokeSensorId);
+            Random random = new Random();
+            try {
+                for (int i = 0; i < 10; i++) { 
+                    if (Context.current().isCancelled()) {
+                        logger.info("Client cancelled the smoke level stream.");
+                        return;
+                    }
+                    if (smokeSensorId == -1) {
+                        responseObserver.onError(new StatusRuntimeException(Status.INVALID_ARGUMENT.withDescription("Invalid sensor ID.")));
+                        return;
+                    }
+                    if (i == 5 && smokeSensorId == 99) { // Simulate a server-side error
+                        responseObserver.onError(new StatusRuntimeException(Status.INTERNAL.withDescription("Simulated server error.")));
+                        return;
+                    }
+                    int smokeLevel = random.nextInt(100);
+                    SmokeLevelResponse response = SmokeLevelResponse.newBuilder().setSmokeLevel(smokeLevel).build();
+                    responseObserver.onNext(response);
+                    TimeUnit.SECONDS.sleep(1); // Simulate reading interval
+                }
+            } catch (InterruptedException e) {
+                logger.log(Level.WARNING, "Stream interrupted.", e);
+            } finally {
+                responseObserver.onCompleted();
+            }
         }
     }
 }
