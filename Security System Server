@@ -1,1 +1,113 @@
+/*
+ * Click nbfs://nbhost/SystemFileSystem/Templates/Licenses/license-default.txt to change this license
+ * Click nbfs://nbhost/SystemFileSystem/Templates/Classes/Class.java to edit this template
+ */
+
+/**
+ *
+ * @author jesutofunmiawodein
+ */
+// Server 
+
+
+import grpc.generated.SecuritySystem.SecuritySystemGrpc;
+import grpc.generated.SecuritySystem.VideoAnalysisResponse;
+import grpc.generated.SecuritySystem.VideoSegmentsRequest;
+import io.grpc.Server;
+import io.grpc.ServerBuilder;
+import io.grpc.stub.StreamObserver;
+import java.io.IOException;
+import java.util.Random;
+import java.util.concurrent.TimeUnit;
+import java.util.logging.Level;
+import java.util.logging.Logger;
+
+public class SecuritySystemServer {
+
+    private static final Logger logger = Logger.getLogger(SecuritySystemServer.class.getName());
+
+    private Server server;
+
+    private void start() throws IOException {
+        int port = 50051;
+        server = ServerBuilder.forPort(port)
+                .addService(new SecuritySystemServiceImpl())
+                .build()
+                .start();
+        logger.info("Server started, listening on " + port);
+        Runtime.getRuntime().addShutdownHook(new Thread(() -> {
+            System.err.println("*** shutting down gRPC server since JVM is shutting down");
+            try {
+                SecuritySystemServer.this.stop();
+            } catch (InterruptedException e) {
+                e.printStackTrace(System.err);
+            }
+            System.err.println("*** server shut down");
+        }));
+    }
+
+    private void stop() throws InterruptedException {
+        if (server != null) {
+            server.shutdown().awaitTermination(30, TimeUnit.SECONDS);
+        }
+    }
+
+    private void blockUntilShutdown() throws InterruptedException {
+        if (server != null) {
+            server.awaitTermination();
+        }
+    }
+
+    public static void main(String[] args) throws IOException, InterruptedException {
+        final SecuritySystemServer server = new SecuritySystemServer();
+        server.start();
+        server.blockUntilShutdown();
+    }
+
+    static class SecuritySystemServiceImpl extends SecuritySystemGrpc.SecuritySystemImplBase {
+
+        @Override
+        public StreamObserver<VideoSegmentsRequest> uploadVideoSegments(StreamObserver<VideoAnalysisResponse> responseObserver) {
+            return new StreamObserver<VideoSegmentsRequest>() {
+                private int totalBytesReceived = 0;
+                private boolean motionDetected = false;
+                private boolean faceRecognized = false;
+
+                @Override
+                public void onNext(VideoSegmentsRequest request) {
+                    int segmentSize = request.getData().size();
+                    totalBytesReceived += segmentSize;
+                    logger.info("Received video segment of size: " + segmentSize + " bytes");
+
+                    // Simulate video analysis logic
+                    // In a real scenario, you would process the video data here
+                    Random random = new Random();
+                    if (random.nextInt(10) < 3) { // Simulate motion detection
+                        motionDetected = true;
+                    }
+                    if (random.nextInt(10) < 2) { // Simulate face recognition
+                        faceRecognized = true;
+                    }
+                }
+
+                @Override
+                public void onError(Throwable t) {
+                    logger.log(Level.WARNING, "Error while uploading video segments: {0}", t.getMessage());
+                    responseObserver.onError(t);
+                }
+
+                @Override
+                public void onCompleted() {
+                    logger.info("Finished uploading video segments. Total bytes received: " + totalBytesReceived);
+                    VideoAnalysisResponse response = VideoAnalysisResponse.newBuilder()
+                            .setMotionDetected(motionDetected)
+                            .setRecognizedFace(faceRecognized)
+                            .build();
+                    responseObserver.onNext(response);
+                    responseObserver.onCompleted();
+                }
+            };
+        }
+    }
+}
 
